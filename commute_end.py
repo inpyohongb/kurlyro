@@ -4,6 +4,10 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 import logging
+from flask import Flask
+import threading
+
+app = Flask(__name__)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -153,8 +157,22 @@ def run():
         logger.error(f"Error in run function: {str(e)}")
         raise
 
+@app.route('/health')
+def health_check():
+    return 'OK', 200
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8000)
+
 if __name__ == "__main__":
     logger.info("Starting application")
+    
+    # Flask 서버를 별도 스레드로 실행
+    thread = threading.Thread(target=run_flask)
+    thread.daemon = True
+    thread.start()
+    
+    # 기존 크롤링 로직
     while True:
         try:
             run()
