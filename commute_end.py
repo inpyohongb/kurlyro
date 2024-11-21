@@ -4,10 +4,7 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 import logging
-from flask import Flask
-import threading
-
-app = Flask(__name__)
+import pytz
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -138,16 +135,25 @@ def process_data(response):
 def run():
     try:
         logger.info("Starting data collection and update process")
+
+        # 한국 시간대 설정
+        korean_tz = pytz.timezone('Asia/Seoul')
+        
+        # 한국 시간 기준으로 오늘, 어제 날짜 계산
+        today_korea = datetime.now(korean_tz).date()
+        yesterday_korea = today_korea - timedelta(days=1)
+
+        # 날짜를 문자열로 변환
+        today_str = today_korea.strftime("%Y-%m-%d")
+        yesterday_str = yesterday_korea.strftime("%Y-%m-%d")
         
         # 오늘 날짜 데이터 처리
-        today = datetime.now().strftime("%Y-%m-%d")
-        today_data = process_data(get_data(today))
+        today_data = process_data(get_data(today_str))
         if len(today_data) > 0:
             update_spreadsheet("today_kurlyro", today_data)
         
         # 어제 날짜 데이터 처리
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        yesterday_data = process_data(get_data(yesterday))
+        yesterday_data = process_data(get_data(yesterday_str))
         if len(yesterday_data) > 0:
             update_spreadsheet("yesterday_kurlyro", yesterday_data)
         
@@ -157,22 +163,8 @@ def run():
         logger.error(f"Error in run function: {str(e)}")
         raise
 
-@app.route('/health')
-def health_check():
-    return 'OK', 200
-
-def run_flask():
-    app.run(host='0.0.0.0', port=8000)
-
 if __name__ == "__main__":
     logger.info("Starting application")
-    
-    # Flask 서버를 별도 스레드로 실행
-    thread = threading.Thread(target=run_flask)
-    thread.daemon = True
-    thread.start()
-    
-    # 기존 크롤링 로직
     while True:
         try:
             run()
