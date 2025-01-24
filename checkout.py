@@ -51,7 +51,7 @@ def update_spreadsheet(worksheet_name, data):
 def getdata(date):
     try:
         loginurl = "https://api-lms.kurly.com/v1/admin-accounts/login"
-        idpw = {"loginId": "ian980608", "password": "ssh2019!"}
+        idpw = {"loginId": "ian980608", "password": "wnanscjfl1!"}
         
         login_response = requests.post(loginurl, json=idpw)
         login_response.raise_for_status()
