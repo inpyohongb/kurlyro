@@ -1,0 +1,32 @@
+name: Kurly Data Collection
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # 5분마다 실행
+  workflow_dispatch:        # 수동 실행 옵션
+
+jobs:
+  run-data-collection:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flask pytz
+    
+    - name: Create service account key file
+      run: |
+        echo '${{ secrets.SCAN_KEY_JSON }}' > scan_key.json
+    
+    - name: Run data collection script
+      env:
+        KURLY_LOGIN_ID: ${{ secrets.KURLY_LOGIN_ID }}
+        KURLY_PASSWORD: ${{ secrets.KURLY_PASSWORD }}
+      run: python commute_end.py
