@@ -5,110 +5,123 @@ import gspread
 from google.oauth2.service_account import Credentials
 import logging
 import pytz
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def initialize_gspread():
-    scope = [
-        'https://spreadsheets.google.com/feeds',
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/spreadsheets'
-    ]
-    
-    try:
-        creds = Credentials.from_service_account_file('scan_key.json', scopes=scope)
-        client = gspread.authorize(creds)
-        logger.info("Successfully initialized gspread client")
-        return client
-    except Exception as e:
-        logger.error(f"Failed to initialize gspread: {str(e)}")
-        raise
+class KurlyDataCollector:
+    def __init__(self):
+        # 세션 설정 및 재시도 전략
+        self.session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=100, pool_maxsize=100)
+        self.session.mount("https://", adapter)
+        
+        # 인증 토큰
+        self.token = None
+        
+    def login(self):
+        """로그인 및 토큰 획득"""
+        login_id = os.environ.get('KURLY_LOGIN_ID')
+        password = os.environ.get('KURLY_PASSWORD')
+        
+        login_response = self.session.post(
+            "https://api-lms.kurly.com/v1/admin-accounts/login",
+            json={"loginId": login_id, "password": password}
+        )
+        login_response.raise_for_status()
+        self.token = login_response.json()['data']['token']
+        self.session.headers.update({'authorization': f'Bearer {self.token}'})
+
+    def get_page_data(self, url, params):
+        """단일 페이지 데이터 수집"""
+        try:
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            return response.json()['data']['content']
+        except Exception as e:
+            logger.error(f"Error fetching page {params['page']}: {str(e)}")
+            return []
+
+    def get_data(self, date):
+        """날짜별 데이터 수집"""
+        try:
+            if not self.token:
+                self.login()
+            
+            url = "https://api-lms.kurly.com/v1/commutes/end"
+            initial_params = {
+                "page": 1,
+                "size": 200,  # 페이지당 데이터 수 증가
+                "cluster": "CC03",
+                "center": "GPM1",
+                "workPart": "IB",
+                "startDate": date,
+                "endDate": date
+            }
+            
+            # 첫 페이지 요청으로 총 페이지 수 확인
+            first_response = self.session.get(url, params=initial_params)
+            first_response.raise_for_status()
+            data = first_response.json()['data']
+            total_pages = data['totalPages']
+            result = data['content']
+
+            # 병렬로 나머지 페이지 데이터 수집
+            if total_pages > 1:
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    future_to_page = {
+                        executor.submit(
+                            self.get_page_data,
+                            url,
+                            {**initial_params, "page": page}
+                        ): page
+                        for page in range(2, total_pages + 1)
+                    }
+                    
+                    for future in as_completed(future_to_page):
+                        result.extend(future.result())
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in get_data: {str(e)}")
+            raise
 
 def update_spreadsheet(worksheet_name, data):
+    """스프레드시트 업데이트"""
     try:
-        gc = initialize_gspread()
-        workbook = gc.open("newdashboard raw")
+        scope = ['https://spreadsheets.google.com/feeds',
+                'https://www.googleapis.com/auth/drive',
+                'https://www.googleapis.com/auth/spreadsheets']
+        
+        creds = Credentials.from_service_account_file('scan_key.json', scopes=scope)
+        client = gspread.authorize(creds)
+        
+        workbook = client.open("newdashboard raw")
         worksheet = workbook.worksheet(worksheet_name)
         
-        logger.info(f"Updating sheet {worksheet_name} with {len(data)} rows of data")
+        if data:
+            worksheet.batch_clear(["A2:H1000"])
+            worksheet.update('A2', data)
+            logger.info(f"Updated {len(data)} rows in {worksheet_name}")
         
-        if not data:
-            logger.warning("No data to update")
-            return
-            
-        # 기존 데이터 삭제
-        worksheet.batch_clear(["A2:H1000"])
-        
-        # 새 데이터 업데이트
-        worksheet.update('A2', data)
-        logger.info(f"Successfully updated {len(data)} rows of data in {worksheet_name}")
-            
     except Exception as e:
         logger.error(f"Error in spreadsheet update: {str(e)}")
         raise
 
-def get_data(date):
-    try:
-        # 로그인 정보 가져오기
-        login_id = os.environ.get('KURLY_LOGIN_ID')
-        password = os.environ.get('KURLY_PASSWORD')
-        
-        # 로그인 요청
-        loginurl = "https://api-lms.kurly.com/v1/admin-accounts/login"
-        login_response = requests.post(loginurl, json={
-            "loginId": login_id,
-            "password": password
-        })
-        login_response.raise_for_status()
-        
-        token = login_response.json()['data']['token']
-        logger.info("Login successful")
-        
-        headers = {'authorization': f'Bearer {token}'}
-        url = "https://api-lms.kurly.com/v1/commutes/end"
-
-        # 한 페이지당 더 많은 데이터 요청 (30 -> 100)
-        params = {
-            "page": 1,
-            "size": 100,
-            "cluster": "CC03",
-            "center": "GPM1",
-            "workPart": "IB",
-            "isEndWork": False,
-            "isEarlyEndWork": False,
-            "isOverWork": False,
-            "isEarlyStartWork": False,
-            "startDate": date,
-            "endDate": date
-        }
-
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()['data']
-        
-        total_pages = data['totalPages']
-        result = data['content']
-        
-        # 나머지 페이지 데이터 수집
-        for page in range(2, total_pages + 1):
-            params['page'] = page
-            page_response = requests.get(url, headers=headers, params=params)
-            page_response.raise_for_status()
-            result.extend(page_response.json()['data']['content'])
-            
-        logger.info(f"Retrieved {len(result)} records for date {date}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error getting data: {str(e)}")
-        raise
-
 def process_data(response):
+    """데이터 처리"""
     try:
         result = []
-        
         for item in response:
             processed_item = [
                 item.get('name', ''),
@@ -120,10 +133,7 @@ def process_data(response):
                 item.get('overWorkMinuteTime', ''),
                 item.get('overWorkStartMinuteTime', '')
             ]
-            
             result.append(processed_item)
-        
-        logger.info(f"Processed {len(result)} records")
         return result
     except Exception as e:
         logger.error(f"Error processing data: {str(e)}")
@@ -131,28 +141,36 @@ def process_data(response):
 
 def main():
     try:
-        logger.info("Starting data collection process")
+        logger.info("Starting data collection")
+        start_time = datetime.now()
         
-        # 한국 시간대 설정
+        collector = KurlyDataCollector()
+        
+        # 한국 시간 기준 날짜 계산
         korean_tz = pytz.timezone('Asia/Seoul')
-        today_korea = datetime.now(korean_tz).date()
-        yesterday_korea = today_korea - timedelta(days=1)
+        now = datetime.now(korean_tz)
+        today_str = now.strftime("%Y-%m-%d")
+        yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        # 병렬로 오늘/어제 데이터 수집 및 처리
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_to_date = {
+                executor.submit(collector.get_data, today_str): ("today_kurlyro", today_str),
+                executor.submit(collector.get_data, yesterday_str): ("yesterday_kurlyro", yesterday_str)
+            }
+            
+            for future in as_completed(future_to_date):
+                sheet_name, date = future_to_date[future]
+                try:
+                    data = future.result()
+                    processed_data = process_data(data)
+                    if processed_data:
+                        update_spreadsheet(sheet_name, processed_data)
+                except Exception as e:
+                    logger.error(f"Error processing {date}: {str(e)}")
 
-        # 날짜 문자열 변환
-        today_str = today_korea.strftime("%Y-%m-%d")
-        yesterday_str = yesterday_korea.strftime("%Y-%m-%d")
-        
-        # 오늘 데이터 처리
-        today_data = process_data(get_data(today_str))
-        if len(today_data) > 0:
-            update_spreadsheet("today_kurlyro", today_data)
-        
-        # 어제 데이터 처리
-        yesterday_data = process_data(get_data(yesterday_str))
-        if len(yesterday_data) > 0:
-            update_spreadsheet("yesterday_kurlyro", yesterday_data)
-        
-        logger.info("Completed data collection and update process")
+        execution_time = datetime.now() - start_time
+        logger.info(f"Completed in {execution_time.total_seconds():.2f} seconds")
         
     except Exception as e:
         logger.error(f"Error in main function: {str(e)}")
