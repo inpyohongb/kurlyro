@@ -111,14 +111,14 @@ def process_data(response):
         
         for item in response:
             processed_item = [
-                str(item.get('name', '')).replace(' ', ''),
-                str(item.get('teamName', '')).replace(' ', ''),
-                str(item.get('userId', '')).replace(' ', ''),
-                str(item.get('centerShiftHourType', '')).replace(' ', ''),
-                str(item.get('startWorkDateTime', '')).replace(' ', ''),
-                str(item.get('endWorkDateTime', '')).replace(' ', ''),
-                str(item.get('overWorkMinuteTime', '')).replace(' ', ''),
-                str(item.get('overWorkStartMinuteTime', '')).replace(' ', '')
+                item.get('name', ''),
+                item.get('teamName', ''),
+                item.get('userId', ''),
+                item.get('centerShiftHourType', ''),
+                item.get('startWorkDateTime', ''),
+                item.get('endWorkDateTime', ''),
+                item.get('overWorkMinuteTime', ''),
+                item.get('overWorkStartMinuteTime', '')
             ]
             
             result.append(processed_item)
