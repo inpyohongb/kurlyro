@@ -22,7 +22,7 @@ class KurlyDataCollector:
             backoff_factor=0.5,
             status_forcelist=[500, 502, 503, 504]
         )
-        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=100, pool_maxsize=100)
+        adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
         
         # 인증 토큰
@@ -60,10 +60,14 @@ class KurlyDataCollector:
             url = "https://api-lms.kurly.com/v1/commutes/end"
             initial_params = {
                 "page": 1,
-                "size": 200,  # 페이지당 데이터 수 증가
+                "size": 30,  # 원래 페이지 크기로 복원
                 "cluster": "CC03",
                 "center": "GPM1",
                 "workPart": "IB",
+                "isEndWork": False,
+                "isEarlyEndWork": False,
+                "isOverWork": False,
+                "isEarlyStartWork": False,
                 "startDate": date,
                 "endDate": date
             }
@@ -77,7 +81,7 @@ class KurlyDataCollector:
 
             # 병렬로 나머지 페이지 데이터 수집
             if total_pages > 1:
-                with ThreadPoolExecutor(max_workers=5) as executor:
+                with ThreadPoolExecutor(max_workers=4) as executor:
                     future_to_page = {
                         executor.submit(
                             self.get_page_data,
