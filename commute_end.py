@@ -57,7 +57,10 @@ def get_data(date):
     try:
         # 로그인, 토큰 저장
         loginurl = "https://api-lms.kurly.com/v1/admin-accounts/login"
-        idpw = {"loginId": "ian980608", "password": "wnanscjfl1!"}
+        idpw = {
+            "loginId": os.environ['KURLY_LOGIN_ID'],
+            "password": os.environ['KURLY_PASSWORD']
+        }
         
         login_response = requests.post(loginurl, json=idpw)
         login_response.raise_for_status()
