@@ -1,15 +1,10 @@
 import os
 import requests
 from datetime import datetime, timedelta
-import time
 import gspread
 from google.oauth2.service_account import Credentials
-from flask import Flask
-import threading
 import logging
 import pytz
-
-app = Flask(__name__)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -56,35 +51,28 @@ def update_spreadsheet(worksheet_name, data):
 
 def get_data(date):
     try:
-        # 환경변수 값 로깅
+        # 로그인 정보 가져오기
         login_id = os.environ.get('KURLY_LOGIN_ID')
         password = os.environ.get('KURLY_PASSWORD')
-        logger.info(f"Login ID length: {len(login_id) if login_id else 'None'}")
-        logger.info(f"Password length: {len(password) if password else 'None'}")
         
-        # 로그인, 토큰 저장
+        # 로그인 요청
         loginurl = "https://api-lms.kurly.com/v1/admin-accounts/login"
-        idpw = {"loginId": login_id, "password": password}
-        
-        # 요청 데이터 로깅 (비밀번호는 제외)
-        logger.info(f"Login request data: {{'loginId': '{login_id}'}}")
-        
-        login_response = requests.post(loginurl, json=idpw)
-        
-        # 응답 상태 코드와 내용 로깅
-        logger.info(f"Login response status: {login_response.status_code}")
-        logger.info(f"Login response content: {login_response.text}")
+        login_response = requests.post(loginurl, json={
+            "loginId": login_id,
+            "password": password
+        })
         login_response.raise_for_status()
         
         token = login_response.json()['data']['token']
         logger.info("Login successful")
         
-        headers = {'authorization': 'Bearer ' + token}
+        headers = {'authorization': f'Bearer {token}'}
         url = "https://api-lms.kurly.com/v1/commutes/end"
 
+        # 한 페이지당 더 많은 데이터 요청 (30 -> 100)
         params = {
             "page": 1,
-            "size": 30,
+            "size": 100,
             "cluster": "CC03",
             "center": "GPM1",
             "workPart": "IB",
@@ -100,13 +88,11 @@ def get_data(date):
         response.raise_for_status()
         data = response.json()['data']
         
-        # 총 페이지 수 확인
         total_pages = data['totalPages']
         result = data['content']
         
-        # 2페이지부터 마지막 페이지까지 데이터 수집
+        # 나머지 페이지 데이터 수집
         for page in range(2, total_pages + 1):
-            time.sleep(3)  # API 호출 간 딜레이
             params['page'] = page
             page_response = requests.get(url, headers=headers, params=params)
             page_response.raise_for_status()
@@ -124,26 +110,18 @@ def process_data(response):
         result = []
         
         for item in response:
-            # None 값을 빈 문자열로 처리하는 안전한 변환 함수
-            def safe_replace(value):
-                if value is None:
-                    return ''
-                return str(value).replace(' ', '')
-            
-            # 각 필드에 대해 안전하게 처리
             processed_item = [
-                safe_replace(item.get('name')),
-                safe_replace(item.get('teamName')),
-                safe_replace(item.get('userId')),
-                safe_replace(item.get('centerShiftHourType')),
-                safe_replace(item.get('startWorkDateTime')),
-                safe_replace(item.get('endWorkDateTime')),
-                safe_replace(item.get('overWorkMinuteTime')),
-                safe_replace(item.get('overWorkStartMinuteTime'))
+                str(item.get('name', '')).replace(' ', ''),
+                str(item.get('teamName', '')).replace(' ', ''),
+                str(item.get('userId', '')).replace(' ', ''),
+                str(item.get('centerShiftHourType', '')).replace(' ', ''),
+                str(item.get('startWorkDateTime', '')).replace(' ', ''),
+                str(item.get('endWorkDateTime', '')).replace(' ', ''),
+                str(item.get('overWorkMinuteTime', '')).replace(' ', ''),
+                str(item.get('overWorkStartMinuteTime', '')).replace(' ', '')
             ]
             
             result.append(processed_item)
-            logger.debug(f"Added record: {processed_item[0]}")  # name 필드 로깅
         
         logger.info(f"Processed {len(result)} records")
         return result
@@ -151,54 +129,34 @@ def process_data(response):
         logger.error(f"Error processing data: {str(e)}")
         raise
 
-def run():
+def main():
     try:
-        logger.info("Starting data collection and update process")
-
+        logger.info("Starting data collection process")
+        
         # 한국 시간대 설정
         korean_tz = pytz.timezone('Asia/Seoul')
-        
-        # 한국 시간 기준으로 오늘, 어제 날짜 계산
         today_korea = datetime.now(korean_tz).date()
         yesterday_korea = today_korea - timedelta(days=1)
 
-        # 날짜를 문자열로 변환
+        # 날짜 문자열 변환
         today_str = today_korea.strftime("%Y-%m-%d")
         yesterday_str = yesterday_korea.strftime("%Y-%m-%d")
         
-        # 오늘 날짜 데이터 처리
+        # 오늘 데이터 처리
         today_data = process_data(get_data(today_str))
         if len(today_data) > 0:
             update_spreadsheet("today_kurlyro", today_data)
         
-        # 어제 날짜 데이터 처리
+        # 어제 데이터 처리
         yesterday_data = process_data(get_data(yesterday_str))
         if len(yesterday_data) > 0:
             update_spreadsheet("yesterday_kurlyro", yesterday_data)
         
-        logger.info("Completed data update cycle")
+        logger.info("Completed data collection and update process")
         
     except Exception as e:
-        logger.error(f"Error in run function: {str(e)}")
+        logger.error(f"Error in main function: {str(e)}")
         raise
 
-@app.route('/health')
-def health_check():
-    return 'OK', 200
-def run_flask():
-    app.run(host='0.0.0.0', port=8000)
-
 if __name__ == "__main__":
-    logger.info("Starting application")
-
-    # Flask 서버를 별도 스레드로 실행
-    thread = threading.Thread(target=run_flask)
-    thread.daemon = True
-    thread.start()
-    
-    # 한 번만 실행하도록 수정
-    try:
-        run()
-        logger.info("Data collection completed successfully")
-    except Exception as e:
-        logger.error(f"Error in main loop: {str(e)}")
+    main()
