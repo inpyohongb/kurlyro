@@ -195,12 +195,10 @@ if __name__ == "__main__":
     thread = threading.Thread(target=run_flask)
     thread.daemon = True
     thread.start()
-    while True:
-        try:
-            run()
-            logger.info("Waiting 300 seconds before next cycle")
-            time.sleep(300)
-        except Exception as e:
-            logger.error(f"Error in main loop: {str(e)}")
-            logger.info("Retrying in 300 seconds...")
-            time.sleep(300)
+    
+    # 한 번만 실행하도록 수정
+    try:
+        run()
+        logger.info("Data collection completed successfully")
+    except Exception as e:
+        logger.error(f"Error in main loop: {str(e)}")
