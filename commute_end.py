@@ -56,15 +56,26 @@ def update_spreadsheet(worksheet_name, data):
 
 def get_data(date):
     try:
+        # 환경변수 값 로깅
+        login_id = os.environ.get('KURLY_LOGIN_ID')
+        password = os.environ.get('KURLY_PASSWORD')
+        logger.info(f"Login ID length: {len(login_id) if login_id else 'None'}")
+        logger.info(f"Password length: {len(password) if password else 'None'}")
+        
         # 로그인, 토큰 저장
         loginurl = "https://api-lms.kurly.com/v1/admin-accounts/login"
-        idpw = {
-            "loginId": os.environ['KURLY_LOGIN_ID'],
-            "password": os.environ['KURLY_PASSWORD']
-        }
+        idpw = {"loginId": login_id, "password": password}
+        
+        # 요청 데이터 로깅 (비밀번호는 제외)
+        logger.info(f"Login request data: {{'loginId': '{login_id}'}}")
         
         login_response = requests.post(loginurl, json=idpw)
+        
+        # 응답 상태 코드와 내용 로깅
+        logger.info(f"Login response status: {login_response.status_code}")
+        logger.info(f"Login response content: {login_response.text}")
         login_response.raise_for_status()
+        
         token = login_response.json()['data']['token']
         logger.info("Login successful")
         
