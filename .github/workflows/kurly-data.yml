@@ -1,8 +1,8 @@
 name: Kurly Data Collection
 on:
   schedule:
-    - cron: '*/3 * * * *'  # 3분마다 실행
-  workflow_dispatch:        # 수동 실행 옵션
+    - cron: '*/10 * * * *'  # 10분마다 시작
+  workflow_dispatch:
 
 jobs:
   run-data-collection:
@@ -25,8 +25,18 @@ jobs:
       run: |
         echo '${{ secrets.SCAN_KEY_JSON }}' > scan_key.json
     
-    - name: Run data collection script
+    - name: Run data collection repeatedly
       env:
         KURLY_LOGIN_ID: ${{ secrets.KURLY_LOGIN_ID }}
         KURLY_PASSWORD: ${{ secrets.KURLY_PASSWORD }}
-      run: python commute_end.py
+      run: |
+        # 첫 번째 실행
+        python commute_end.py
+        
+        # 2분 대기 후 다시 실행
+        sleep 120
+        python commute_end.py
+        
+        # 2분 대기 후 다시 실행
+        sleep 120
+        python commute_end.py
