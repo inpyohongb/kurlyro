@@ -1,4 +1,4 @@
-name: Kurly Data Collection 6
+name: Kurly Data Collection 1
 on:
   schedule:
     - cron: '57 * * * *'  # 매시간 57분에 실행
@@ -16,12 +16,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    - name: Create service account key file
-      run: |
-        echo '${{ secrets.SCAN_KEY_JSON }}' > scan_key.json
     - name: Run data collection
       env:
         KURLY_LOGIN_ID: ${{ secrets.KURLY_LOGIN_ID }}
         KURLY_PASSWORD: ${{ secrets.KURLY_PASSWORD }}
+        GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
       run: |
         python commute_end.py
