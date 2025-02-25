@@ -1,4 +1,4 @@
-name: Kurly Data Collection 1
+name: Kurly Data Collection 30
 on:
   schedule:
     - cron: '30 * * * *'  # 매시간 7분에 실행
