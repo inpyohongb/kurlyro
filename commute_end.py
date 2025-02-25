@@ -103,7 +103,7 @@ class KurlyDataCollector:
 
 def get_google_credentials():
     """GitHub Secrets에서 JSON을 불러와 Credentials 생성"""
-    google_credentials = os.environ.get("SCAN_KEY_JSON")
+    google_credentials = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 
     if not google_credentials:
         raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable.")
