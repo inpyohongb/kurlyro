@@ -109,13 +109,12 @@ def get_google_credentials():
         raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable.")
 
     try:
-        credentials_dict = json.loads(google_credentials)
+        credentials_dict = json.loads(google_credentials)  # JSON 문자열을 딕셔너리로 변환
         
-        # private_key에서 개행 문자 처리 확인
-        if "private_key" in credentials_dict:
-            # 리터럴 \n을 실제 개행 문자로 변환
-            if "\\n" in credentials_dict["private_key"] and "\n" not in credentials_dict["private_key"]:
-                credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+        # 디버깅용 로그 (실제 키는 출력하지 않음)
+        logger.info(f"Credential keys present: {', '.join(credentials_dict.keys())}")
+        logger.info(f"Project ID: {credentials_dict.get('project_id')}")
+        logger.info(f"Client email: {credentials_dict.get('client_email')}")
         
         scope = [
             'https://spreadsheets.google.com/feeds',
@@ -124,8 +123,11 @@ def get_google_credentials():
         ]
 
         return Credentials.from_service_account_info(credentials_dict, scopes=scope)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {str(e)}")
+        raise
     except Exception as e:
-        logger.error(f"Error creating credentials: {str(e)}")
+        logger.error(f"Credential error: {str(e)}")
         raise
 
 def update_spreadsheet(worksheet_name, data):
