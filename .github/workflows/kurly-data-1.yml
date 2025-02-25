@@ -20,6 +20,6 @@ jobs:
       env:
         KURLY_LOGIN_ID: ${{ secrets.KURLY_LOGIN_ID }}
         KURLY_PASSWORD: ${{ secrets.KURLY_PASSWORD }}
-        GOOGLE_CREDENTIALS_JSON: ${{ secrets.SCAN_KEY_JSON }}
+        GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
       run: |
         python commute_end.py
