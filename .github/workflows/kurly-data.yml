@@ -1,7 +1,7 @@
 name: Kurly Data Collection
 on:
   schedule:
-    - cron: '*/5 * * * *'  # 5분마다 실행
+    - cron: '*/3 * * * *'  # 3분마다 실행
   workflow_dispatch:        # 수동 실행 옵션
 
 jobs:
