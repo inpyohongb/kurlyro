@@ -111,11 +111,6 @@ def get_google_credentials():
     try:
         credentials_dict = json.loads(google_credentials)  # JSON 문자열을 딕셔너리로 변환
         
-        # 디버깅용 로그 (실제 키는 출력하지 않음)
-        logger.info(f"Credential keys present: {', '.join(credentials_dict.keys())}")
-        logger.info(f"Project ID: {credentials_dict.get('project_id')}")
-        logger.info(f"Client email: {credentials_dict.get('client_email')}")
-        
         scope = [
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive',
