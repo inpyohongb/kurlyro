@@ -5,6 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import logging
 import pytz
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
@@ -100,26 +101,38 @@ class KurlyDataCollector:
             logger.error(f"Error in get_data: {str(e)}")
             raise
 
+def get_google_credentials():
+    """GitHub Secrets에서 JSON을 불러와 Credentials 생성"""
+    google_credentials = os.environ.get("SCAN_KEY_JSON")
+
+    if not google_credentials:
+        raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable.")
+
+    credentials_dict = json.loads(google_credentials)  # JSON 문자열을 딕셔너리로 변환
+    scope = [
+        'https://spreadsheets.google.com/feeds',
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/spreadsheets'
+    ]
+
+    return Credentials.from_service_account_info(credentials_dict, scopes=scope)
+
 def update_spreadsheet(worksheet_name, data):
-    """스프레드시트 업데이트"""
+    """Google Sheets 업데이트 (GitHub Secrets 사용)"""
     try:
-        scope = ['https://spreadsheets.google.com/feeds',
-                'https://www.googleapis.com/auth/drive',
-                'https://www.googleapis.com/auth/spreadsheets']
-        
-        creds = Credentials.from_service_account_file('scan_key.json', scopes=scope)
+        creds = get_google_credentials()
         client = gspread.authorize(creds)
-        
+
         workbook = client.open("newdashboard raw")
         worksheet = workbook.worksheet(worksheet_name)
-        
+
         if data:
             worksheet.batch_clear(["A2:H1000"])
             worksheet.update('A2', data)
-            logger.info(f"Updated {len(data)} rows in {worksheet_name}")
-        
+            print(f"Updated {len(data)} rows in {worksheet_name}")
+
     except Exception as e:
-        logger.error(f"Error in spreadsheet update: {str(e)}")
+        print(f"Error in spreadsheet update: {str(e)}")
         raise
 
 def process_data(response):
