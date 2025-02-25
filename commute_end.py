@@ -108,14 +108,25 @@ def get_google_credentials():
     if not google_credentials:
         raise ValueError("Missing GOOGLE_CREDENTIALS_JSON environment variable.")
 
-    credentials_dict = json.loads(google_credentials)  # JSON 문자열을 딕셔너리로 변환
-    scope = [
-        'https://spreadsheets.google.com/feeds',
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/spreadsheets'
-    ]
+    try:
+        credentials_dict = json.loads(google_credentials)
+        
+        # private_key에서 개행 문자 처리 확인
+        if "private_key" in credentials_dict:
+            # 리터럴 \n을 실제 개행 문자로 변환
+            if "\\n" in credentials_dict["private_key"] and "\n" not in credentials_dict["private_key"]:
+                credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+        
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
 
-    return Credentials.from_service_account_info(credentials_dict, scopes=scope)
+        return Credentials.from_service_account_info(credentials_dict, scopes=scope)
+    except Exception as e:
+        logger.error(f"Error creating credentials: {str(e)}")
+        raise
 
 def update_spreadsheet(worksheet_name, data):
     """Google Sheets 업데이트 (GitHub Secrets 사용)"""
