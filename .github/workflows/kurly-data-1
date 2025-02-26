@@ -1,0 +1,25 @@
+name: Kurly Data Collection 0
+on:
+  schedule:
+    - cron: '0 * * * *'  # 0분 실행
+  workflow_dispatch:
+jobs:
+  run-data-collection:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Run data collection
+      env:
+        KURLY_LOGIN_ID: ${{ secrets.KURLY_LOGIN_ID }}
+        KURLY_PASSWORD: ${{ secrets.KURLY_PASSWORD }}
+        GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      run: |
+        python commute_end.py
